@@ -1,0 +1,37 @@
+# Databricks notebook source
+
+# MAGIC %run ./_bootstrap
+
+# COMMAND ----------
+
+from chispa.dataframe_comparer import assert_df_equality
+
+from _load_config import load_config
+from _load_scenario import load_scenario
+from {{.project_name}}.analytics.tables.anomaly_alerts import TABLE_NAME as ANOMALY_ALERTS
+from {{.project_name}}.analytics.tables.equipment_metrics import TABLE_NAME as EQUIPMENT_METRICS
+from {{.project_name}}.ingestion.tables.enriched_telemetry import TABLE_NAME as ENRICHED_TELEMETRY
+
+# COMMAND ----------
+
+cfg = load_config(dbutils, spark)
+
+# COMMAND ----------
+
+catalog_name = cfg.catalog_name
+ingestion_schema_name = cfg.ingestion_schema_name
+analytics_schema_name = cfg.analytics_schema_name
+
+EXPECTED_OUTPUTS = load_scenario('basic').EXPECTED_OUTPUTS
+
+table_map = {
+    'expected_enriched_telemetry': f'{catalog_name}.{ingestion_schema_name}.{ENRICHED_TELEMETRY}',
+    'expected_equipment_metrics': f'{catalog_name}.{analytics_schema_name}.{EQUIPMENT_METRICS}',
+    'expected_anomaly_alerts': f'{catalog_name}.{analytics_schema_name}.{ANOMALY_ALERTS}',
+}
+
+for expected_key, actual_fqn in table_map.items():
+    expected = EXPECTED_OUTPUTS[expected_key](spark)
+    actual = spark.table(actual_fqn)
+    assert_df_equality(actual, expected, ignore_row_order=True, ignore_metadata=True)
+    print(f'PASS: {actual_fqn}')

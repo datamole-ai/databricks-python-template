@@ -1,0 +1,14 @@
+from chispa.dataframe_comparer import assert_df_equality
+
+from {{.project_name}}.analytics.metrics import run_equipment_metrics
+
+
+def test_run_equipment_metrics(spark, basic_tables):
+    run_equipment_metrics(
+        spark=spark,
+        source_table='enriched_telemetry',
+        target_table='equipment_metrics',
+    )
+    result = spark.table('equipment_metrics')
+    expected = spark.table('expected_equipment_metrics')
+    assert_df_equality(result, expected, ignore_row_order=True, ignore_metadata=True)

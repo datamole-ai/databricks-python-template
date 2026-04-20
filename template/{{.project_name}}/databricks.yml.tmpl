@@ -1,0 +1,83 @@
+bundle:
+  name: {{.project_name}}
+
+sync:
+  paths:
+    - src/{{.project_name}}
+    - .
+  include:
+    - "*.whl"
+
+artifacts:
+  {{.project_name}}_wheel:
+    type: whl
+    build: uv build --wheel
+    path: .
+
+include:
+  - resources/*.yml
+
+workspace:
+  host: {{workspace_host}}
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      config_file_path: config/app.yaml
+      env: dev
+
+{{- if or (eq .deployment_model "dev_stg_prd") (eq .deployment_model "dev_tst_acc_prd")}}
+{{- if eq .deployment_model "dev_stg_prd"}}
+
+  staging:
+{{- else}}
+
+  test:
+{{- end}}
+    workspace:
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      config_file_path: config/app.yaml
+{{- if eq .deployment_model "dev_stg_prd"}}
+      env: staging
+{{- else}}
+      env: test
+{{- end}}
+    permissions:
+      - service_principal_name: ${var.service_principal_id}
+        level: CAN_MANAGE
+    run_as:
+      service_principal_name: ${var.service_principal_id}
+{{- end}}
+
+{{- if eq .deployment_model "dev_tst_acc_prd"}}
+
+  acceptance:
+    workspace:
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      config_file_path: config/app.yaml
+      env: acceptance
+    permissions:
+      - service_principal_name: ${var.service_principal_id}
+        level: CAN_MANAGE
+    run_as:
+      service_principal_name: ${var.service_principal_id}
+{{- end}}
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      config_file_path: config/app.yaml
+      env: prod
+    permissions:
+      - service_principal_name: ${var.service_principal_id}
+        level: CAN_MANAGE
+    run_as:
+      service_principal_name: ${var.service_principal_id}

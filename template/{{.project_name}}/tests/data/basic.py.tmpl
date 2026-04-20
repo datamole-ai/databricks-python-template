@@ -1,0 +1,105 @@
+from datetime import datetime
+
+from pyspark.sql.types import (
+    DateType,
+    DoubleType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
+
+from {{.project_name}}.analytics.tables.anomaly_alerts import SCHEMA as ANOMALY_ALERTS_SCHEMA
+from {{.project_name}}.analytics.tables.equipment_metrics import SCHEMA as EQUIPMENT_METRICS_SCHEMA
+from {{.project_name}}.ingestion.tables.enriched_telemetry import SCHEMA as ENRICHED_TELEMETRY_SCHEMA
+
+
+def telemetry_fact(spark):
+    schema = StructType([
+        StructField('equipment_id', StringType()),
+        StructField('site_id', StringType()),
+        StructField('temperature', DoubleType()),
+        StructField('vibration', DoubleType()),
+        StructField('pressure', DoubleType()),
+        StructField('timestamp', TimestampType()),
+    ])
+    data = [
+        ('EQ-001', 'S01', 72.5, 1.2, 30.0, datetime(2024, 1, 15, 10, 0)),
+        ('EQ-001', 'S01', 85.0, 1.5, 31.0, datetime(2024, 1, 15, 11, 0)),
+        ('EQ-002', 'S02', 105.0, 2.1, 25.0, datetime(2024, 1, 15, 10, 0)),
+        ('EQ-002', 'S02', 90.0, 6.0, 28.0, datetime(2024, 1, 15, 11, 0)),
+    ]
+    return spark.createDataFrame(data, schema)
+
+
+def site_dim(spark):
+    schema = StructType([
+        StructField('site_id', StringType()),
+        StructField('site_name', StringType()),
+        StructField('region', StringType()),
+        StructField('timezone', StringType()),
+    ])
+    data = [
+        ('S01', 'Plant Alpha', 'North America', 'America/Chicago'),
+        ('S02', 'Plant Beta', 'Europe', 'Europe/Berlin'),
+    ]
+    return spark.createDataFrame(data, schema)
+
+
+def device_dim(spark):
+    schema = StructType([
+        StructField('equipment_id', StringType()),
+        StructField('device_type', StringType()),
+        StructField('manufacturer', StringType()),
+        StructField('install_date', DateType()),
+    ])
+    data = [
+        ('EQ-001', 'compressor', 'Acme Corp', datetime(2023, 1, 15).date()),
+        ('EQ-002', 'turbine', 'GlobalTech', datetime(2023, 6, 1).date()),
+    ]
+    return spark.createDataFrame(data, schema)
+
+
+def enriched_telemetry(spark):
+    data = [
+        ('EQ-001', 'compressor', 'Acme Corp', 'Plant Alpha', 'North America', 72.5, 1.2, 30.0, datetime(2024, 1, 15, 10, 0)),
+        ('EQ-001', 'compressor', 'Acme Corp', 'Plant Alpha', 'North America', 85.0, 1.5, 31.0, datetime(2024, 1, 15, 11, 0)),
+        ('EQ-002', 'turbine', 'GlobalTech', 'Plant Beta', 'Europe', 105.0, 2.1, 25.0, datetime(2024, 1, 15, 10, 0)),
+        ('EQ-002', 'turbine', 'GlobalTech', 'Plant Beta', 'Europe', 90.0, 6.0, 28.0, datetime(2024, 1, 15, 11, 0)),
+    ]
+    return spark.createDataFrame(data, ENRICHED_TELEMETRY_SCHEMA)
+
+
+def equipment_metrics(spark):
+    data = [
+        ('EQ-001', 'compressor', 78.75, 1.35, 30.5, 2),
+        ('EQ-002', 'turbine', 97.5, 4.05, 26.5, 2),
+    ]
+    return spark.createDataFrame(data, EQUIPMENT_METRICS_SCHEMA)
+
+
+def anomaly_alerts(spark):
+    data = [
+        ('EQ-002', 'high_temperature', 105.0, 100.0, datetime(2024, 1, 15, 10, 0)),
+        ('EQ-002', 'high_vibration', 6.0, 5.0, datetime(2024, 1, 15, 11, 0)),
+    ]
+    return spark.createDataFrame(data, ANOMALY_ALERTS_SCHEMA)
+
+
+SEED_TABLES = {
+    'telemetry_fact': telemetry_fact,
+    'site_dim': site_dim,
+    'device_dim': device_dim,
+}
+
+INTERMEDIATE_TABLES = {
+    'enriched_telemetry': enriched_telemetry,
+}
+
+EXPECTED_OUTPUTS = {
+    'expected_enriched_telemetry': enriched_telemetry,
+    'expected_equipment_metrics': equipment_metrics,
+    'expected_anomaly_alerts': anomaly_alerts,
+}
+
+ALL_TABLES = {**SEED_TABLES, **INTERMEDIATE_TABLES, **EXPECTED_OUTPUTS}

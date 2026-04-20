@@ -1,0 +1,82 @@
+{{- $serverless := (eq .serverless "yes")}}
+
+resources:
+  jobs:
+    {{.project_name}}_pipeline:
+      name: "{{.project_name}} Pipeline"
+
+      parameters:
+        - name: dev_id
+          default: ""
+
+      tasks:
+        - task_key: ingest
+          notebook_task:
+            notebook_path: ../notebooks/ingest.py
+            base_parameters:
+              config_file_path: ${var.config_file_path}
+              env: ${var.env}
+              dev_id: "{{ "{{" }}job.parameters.dev_id{{ "}}" }}"
+              job_run_id: "{{ "{{" }}job.run_id{{ "}}" }}"
+{{- if $serverless}}
+          environment_key: default
+{{- else}}
+          job_cluster_key: pipeline_cluster
+          libraries:
+            - whl: ../dist/*.whl
+{{- end}}
+
+        - task_key: compute_metrics
+          depends_on:
+            - task_key: ingest
+          notebook_task:
+            notebook_path: ../notebooks/metrics.py
+            base_parameters:
+              config_file_path: ${var.config_file_path}
+              env: ${var.env}
+              dev_id: "{{ "{{" }}job.parameters.dev_id{{ "}}" }}"
+              job_run_id: "{{ "{{" }}job.run_id{{ "}}" }}"
+{{- if $serverless}}
+          environment_key: default
+{{- else}}
+          job_cluster_key: pipeline_cluster
+          libraries:
+            - whl: ../dist/*.whl
+{{- end}}
+
+        - task_key: detect_anomalies
+          depends_on:
+            - task_key: ingest
+          notebook_task:
+            notebook_path: ../notebooks/anomaly.py
+            base_parameters:
+              config_file_path: ${var.config_file_path}
+              env: ${var.env}
+              dev_id: "{{ "{{" }}job.parameters.dev_id{{ "}}" }}"
+              job_run_id: "{{ "{{" }}job.run_id{{ "}}" }}"
+{{- if $serverless}}
+          environment_key: default
+{{- else}}
+          job_cluster_key: pipeline_cluster
+          libraries:
+            - whl: ../dist/*.whl
+{{- end}}
+
+{{- if $serverless}}
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl
+{{- else}}
+
+      job_clusters:
+        - job_cluster_key: pipeline_cluster
+          new_cluster:
+            spark_version: {{template "latest_lts_dbr_version"}}
+            node_type_id: {{smallest_node_type}}
+            data_security_mode: SINGLE_USER
+            num_workers: 0
+{{- end}}

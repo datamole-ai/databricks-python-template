@@ -1,0 +1,32 @@
+# Runtime config for notebooks: merged section = defaults + environments.<env>.
+# Use {dev_id} in strings where dev schema isolation applies (resolved from job param or current_user()).
+
+defaults:
+  source_catalog: REPLACE_WITH_WAREHOUSE_CATALOG
+  source_schema: REPLACE_WITH_WAREHOUSE_SCHEMA
+  ingestion_schema_name: ingestion
+  analytics_schema_name: analytics
+
+environments:
+  dev:
+    catalog_name: {{.project_name}}_dev
+    source_catalog: {{.project_name}}_dev
+    source_schema: "{dev_id}_warehouse_src"
+    ingestion_schema_name: "{dev_id}_ingestion"
+    analytics_schema_name: "{dev_id}_analytics"
+{{- if eq .deployment_model "dev_stg_prd"}}
+
+  staging:
+    catalog_name: {{.project_name}}_staging
+{{- end}}
+{{- if eq .deployment_model "dev_tst_acc_prd"}}
+
+  test:
+    catalog_name: {{.project_name}}_test
+
+  acceptance:
+    catalog_name: {{.project_name}}_acc
+{{- end}}
+
+  prod:
+    catalog_name: {{.project_name}}_prod

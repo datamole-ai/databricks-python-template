@@ -1,0 +1,45 @@
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
+
+from {{.project_name}}.analytics.tables import anomaly_alerts as aa
+
+TEMP_THRESHOLD = 100.0
+VIBRATION_THRESHOLD = 5.0
+
+
+def detect_anomalies(enriched: DataFrame) -> DataFrame:
+    high_temp = (
+        enriched
+        .filter(F.col('temperature') > TEMP_THRESHOLD)
+        .select(
+            F.col('equipment_id').alias(aa.COL_EQUIPMENT_ID),
+            F.lit('high_temperature').alias(aa.COL_ALERT_TYPE),
+            F.col('temperature').alias(aa.COL_VALUE),
+            F.lit(TEMP_THRESHOLD).alias(aa.COL_THRESHOLD),
+            F.col('timestamp').alias(aa.COL_TIMESTAMP),
+        )
+    )
+
+    high_vibration = (
+        enriched
+        .filter(F.col('vibration') > VIBRATION_THRESHOLD)
+        .select(
+            F.col('equipment_id').alias(aa.COL_EQUIPMENT_ID),
+            F.lit('high_vibration').alias(aa.COL_ALERT_TYPE),
+            F.col('vibration').alias(aa.COL_VALUE),
+            F.lit(VIBRATION_THRESHOLD).alias(aa.COL_THRESHOLD),
+            F.col('timestamp').alias(aa.COL_TIMESTAMP),
+        )
+    )
+
+    return high_temp.unionByName(high_vibration)
+
+
+def run_anomaly_detection(
+    spark: SparkSession,
+    source_table: str,
+    target_table: str,
+) -> None:
+    enriched = spark.table(source_table)
+    alerts = detect_anomalies(enriched)
+    alerts.write.mode('overwrite').saveAsTable(target_table)

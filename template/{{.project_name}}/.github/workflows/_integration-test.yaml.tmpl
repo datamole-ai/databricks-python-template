@@ -1,0 +1,44 @@
+name: Integration test (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      scenario:
+        description: Fixture scenario to run
+        type: string
+        default: basic
+    secrets:
+      DATABRICKS_HOST:
+        required: true
+      DATABRICKS_TOKEN:
+        required: true
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Deploy to dev
+        run: databricks bundle deploy --target dev
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+
+      - name: Run integration test
+        run: databricks bundle run integration_test_job --params dev_id={{ "${{" }} github.run_id {{ "}}" }},scenario={{ "${{" }} inputs.scenario {{ "}}" }}
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+
+      - name: Destroy dev deployment
+        if: always()
+        run: databricks bundle destroy --target dev --auto-approve
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}

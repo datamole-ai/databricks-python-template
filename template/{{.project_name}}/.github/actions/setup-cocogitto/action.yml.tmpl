@@ -1,0 +1,16 @@
+name: Setup cocogitto
+description: Install cocogitto CLI (Linux x86_64 musl)
+inputs:
+  version:
+    description: cocogitto release version (Git tag, without v prefix)
+    default: "7.0.0"
+runs:
+  using: composite
+  steps:
+    - name: Install cocogitto
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="{{ "${{" }} inputs.version {{ "}}" }}"
+        ASSET="cocogitto-${VERSION}-x86_64-unknown-linux-musl.tar.gz"
+        curl -sSfL "https://github.com/cocogitto/cocogitto/releases/download/${VERSION}/${ASSET}" | tar xz -C /usr/local/bin

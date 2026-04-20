@@ -1,0 +1,27 @@
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
+
+from {{.project_name}}.analytics.tables import equipment_metrics as em
+
+
+def compute_equipment_metrics(enriched: DataFrame) -> DataFrame:
+    return (
+        enriched
+        .groupBy(em.COL_EQUIPMENT_ID, em.COL_DEVICE_TYPE)
+        .agg(
+            F.avg('temperature').alias(em.COL_AVG_TEMPERATURE),
+            F.avg('vibration').alias(em.COL_AVG_VIBRATION),
+            F.avg('pressure').alias(em.COL_AVG_PRESSURE),
+            F.count('*').alias(em.COL_READING_COUNT),
+        )
+    )
+
+
+def run_equipment_metrics(
+    spark: SparkSession,
+    source_table: str,
+    target_table: str,
+) -> None:
+    enriched = spark.table(source_table)
+    metrics = compute_equipment_metrics(enriched)
+    metrics.write.mode('overwrite').saveAsTable(target_table)

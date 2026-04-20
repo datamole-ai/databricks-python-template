@@ -1,0 +1,34 @@
+from pytest import fixture
+from pyspark.sql import SparkSession
+from pysail.spark import SparkConnectServer
+
+from tests.data.basic import ALL_TABLES
+
+
+def _drop_all_tables(spark):
+    for table in spark.catalog.listTables():
+        spark.sql(f'DROP TABLE IF EXISTS {table.name}')
+
+
+@fixture(scope='session')
+def spark():
+    server = SparkConnectServer()
+    server.start(background=True)
+    session = None
+    try:
+        _, port = server.listening_address
+        session = SparkSession.builder.remote(f'sc://127.0.0.1:{port}').getOrCreate()
+        yield session
+    finally:
+        if session is not None:
+            session.stop()
+        server.stop()
+
+
+@fixture
+def basic_tables(spark):
+    _drop_all_tables(spark)
+    for name, factory in ALL_TABLES.items():
+        factory(spark).write.mode('overwrite').saveAsTable(name)
+    yield
+    _drop_all_tables(spark)

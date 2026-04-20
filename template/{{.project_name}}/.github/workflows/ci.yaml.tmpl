@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+{{- if ne .deployment_model "dev_prd"}}
+      - 'release/**'
+{{- end}}
+  pull_request:
+    branches:
+      - main
+{{- if ne .deployment_model "dev_prd"}}
+      - 'release/**'
+{{- end}}
+
+jobs:
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cocogitto
+      - name: Check PR title is conventional
+        run: echo "{{ "${{" }} github.event.pull_request.title {{ "}}" }}" | cog verify --file -
+
+  commit-check:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-cocogitto
+      - run: cog check --from-latest-tag
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --group dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --group dev
+      - run: uv run pytest tests/ -v
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle validate --target dev
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}

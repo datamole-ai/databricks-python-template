@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  github-release:
+{{- if eq .deployment_model "dev_tst_acc_prd"}}
+    if: {{ "${{" }} !contains(github.ref_name, '-rc.') {{ "}}" }}
+{{- end}}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-cocogitto
+      - name: Generate changelog
+        run: cog changelog --at {{ "${{" }} github.ref_name {{ "}}" }} > /tmp/CHANGELOG.md
+      - name: Create GitHub Release
+        run: gh release create "{{ "${{" }} github.ref_name {{ "}}" }}" --notes-file /tmp/CHANGELOG.md --title "{{ "${{" }} github.ref_name {{ "}}" }}"
+        env:
+          GH_TOKEN: {{ "${{" }} secrets.GITHUB_TOKEN {{ "}}" }}

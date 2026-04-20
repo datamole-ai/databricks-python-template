@@ -1,0 +1,10 @@
+variables:
+  config_file_path:
+    description: "Path to multi-environment YAML relative to repository root (e.g. config/app.yaml)."
+    default: config/app.yaml
+  env:
+    description: "Key under environments: in app YAML; should match the bundle target (dev, staging, test, acceptance, prod)."
+    default: dev
+  service_principal_id:
+    description: "Service principal for non-dev targets."
+    default: ""

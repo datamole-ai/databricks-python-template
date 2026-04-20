@@ -1,0 +1,22 @@
+# Databricks notebook source
+
+# MAGIC %run ./_bootstrap
+
+# COMMAND ----------
+
+from _load_config import load_config
+from {{.project_name}}.analytics.anomaly_detection import run_anomaly_detection
+from {{.project_name}}.analytics.tables.anomaly_alerts import TABLE_NAME as ANOMALY_ALERTS
+from {{.project_name}}.ingestion.tables.enriched_telemetry import TABLE_NAME as ENRICHED_TELEMETRY
+
+# COMMAND ----------
+
+cfg = load_config(dbutils, spark)
+
+# COMMAND ----------
+
+run_anomaly_detection(
+    spark=spark,
+    source_table=f'{cfg.catalog_name}.{cfg.ingestion_schema_name}.{ENRICHED_TELEMETRY}',
+    target_table=f'{cfg.catalog_name}.{cfg.analytics_schema_name}.{ANOMALY_ALERTS}',
+)

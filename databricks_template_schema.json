@@ -1,0 +1,27 @@
+{
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "default": "my_project",
+      "description": "Project name (package name and bundle name)",
+      "order": 1,
+      "pattern": "^[a-z][a-z0-9_]{2,}$",
+      "pattern_match_failure_message": "Lowercase, starts with letter, a-z/0-9/underscore, min 3 chars."
+    },
+    "deployment_model": {
+      "type": "string",
+      "description": "What deployment model do you want?",
+      "enum": ["dev_prd", "dev_stg_prd", "dev_tst_acc_prd"],
+      "default": "dev_stg_prd",
+      "order": 2
+    },
+    "serverless": {
+      "type": "string",
+      "default": "yes",
+      "enum": ["yes", "no"],
+      "description": "Use serverless compute",
+      "order": 3
+    }
+  },
+  "success_message": "\nProject '{{.project_name}}' created.\n\nNext steps:\n  cd {{.project_name}}\n  uv sync --group dev\n  uv run pytest tests/\n\nFull documentation: root README.md in the template repo you used with bundle init."
+}

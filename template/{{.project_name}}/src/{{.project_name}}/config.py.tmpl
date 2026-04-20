@@ -1,0 +1,119 @@
+"""Pure config loading from YAML — no Databricks / dbutils dependency."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+@dataclass(frozen=True, slots=True)
+class AppConfig:
+    """Runtime config with explicit, validated attributes."""
+
+    source_catalog: str
+    source_schema: str
+    catalog_name: str
+    ingestion_schema_name: str
+    analytics_schema_name: str
+
+    @classmethod
+    def from_dict(cls, values: dict[str, Any]) -> AppConfig:
+        required = {
+            'source_catalog',
+            'source_schema',
+            'catalog_name',
+            'ingestion_schema_name',
+            'analytics_schema_name',
+        }
+        missing = sorted(required - set(values.keys()))
+        if missing:
+            raise ValueError(f'Missing required config keys: {", ".join(missing)}')
+
+        return cls(
+            source_catalog=str(values['source_catalog']),
+            source_schema=str(values['source_schema']),
+            catalog_name=str(values['catalog_name']),
+            ingestion_schema_name=str(values['ingestion_schema_name']),
+            analytics_schema_name=str(values['analytics_schema_name']),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            'source_catalog': self.source_catalog,
+            'source_schema': self.source_schema,
+            'catalog_name': self.catalog_name,
+            'ingestion_schema_name': self.ingestion_schema_name,
+            'analytics_schema_name': self.analytics_schema_name,
+        }
+
+
+def _shallow_merge(defaults: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    out = dict(defaults)
+    out.update(overlay)
+    return out
+
+
+def _format_strings(obj: Any, dev_id: str) -> Any:
+    if isinstance(obj, str):
+        if '{dev_id}' in obj:
+            return obj.format(dev_id=dev_id)
+        return obj
+    if isinstance(obj, dict):
+        return {k: _format_strings(v, dev_id) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_format_strings(v, dev_id) for v in obj]
+    return obj
+
+
+def contains_dev_id_placeholder(obj: Any) -> bool:
+    if isinstance(obj, str):
+        return '{dev_id}' in obj
+    if isinstance(obj, dict):
+        return any(contains_dev_id_placeholder(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(contains_dev_id_placeholder(v) for v in obj)
+    return False
+
+
+def load_yaml_config(path: Path, env: str, dev_id: str = '') -> AppConfig:
+    """Load ``defaults`` + ``environments[env]`` from YAML, apply ``{dev_id}`` placeholders.
+
+    Pure function — no dbutils, no Spark, no widgets. Raises ``FileNotFoundError`` if
+    ``path`` is missing, ``KeyError`` if ``env`` is not found, ``ValueError`` if the YAML
+    structure is invalid or ``dev_id`` is required but empty.
+    """
+    with path.open('r', encoding='utf-8') as f:
+        doc = yaml.safe_load(f)
+
+    if not isinstance(doc, dict):
+        raise ValueError(f'Config root must be a mapping, got {type(doc).__name__}')
+
+    defaults = doc.get('defaults') or {}
+    if not isinstance(defaults, dict):
+        raise ValueError('defaults must be a mapping')
+
+    environments = doc.get('environments') or {}
+    if not isinstance(environments, dict):
+        raise ValueError('environments must be a mapping')
+
+    if env not in environments:
+        available = ', '.join(sorted(environments.keys())) or '(none)'
+        raise KeyError(f'Unknown env {env!r}. Available: {available}')
+
+    env_block = environments[env]
+    if not isinstance(env_block, dict):
+        raise ValueError(f'environments[{env!r}] must be a mapping')
+
+    merged = _shallow_merge(defaults, env_block)
+
+    if contains_dev_id_placeholder(merged):
+        if not dev_id:
+            raise ValueError(
+                'dev_id is required when the config contains {dev_id} placeholders.'
+            )
+        merged = _format_strings(merged, dev_id)
+
+    return AppConfig.from_dict(merged)

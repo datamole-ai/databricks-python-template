@@ -1,0 +1,14 @@
+from chispa.dataframe_comparer import assert_df_equality
+
+from {{.project_name}}.analytics.anomaly_detection import run_anomaly_detection
+
+
+def test_run_anomaly_detection(spark, basic_tables):
+    run_anomaly_detection(
+        spark=spark,
+        source_table='enriched_telemetry',
+        target_table='anomaly_alerts',
+    )
+    result = spark.table('anomaly_alerts')
+    expected = spark.table('expected_anomaly_alerts')
+    assert_df_equality(result, expected, ignore_row_order=True, ignore_metadata=True)

@@ -1,0 +1,33 @@
+# Databricks notebook source
+
+# MAGIC %run ./_bootstrap
+
+# COMMAND ----------
+
+from _load_config import load_config
+from _load_scenario import load_scenario
+
+# COMMAND ----------
+
+try:
+    scenario = dbutils.widgets.get('scenario')
+except Exception:
+    dbutils.widgets.text('scenario', 'basic')
+    scenario = dbutils.widgets.get('scenario')
+
+cfg = load_config(dbutils, spark)
+
+# COMMAND ----------
+
+catalog = cfg.catalog_name
+source_schema = cfg.source_schema
+ingestion_schema = cfg.ingestion_schema_name
+analytics_schema = cfg.analytics_schema_name
+
+for schema in [source_schema, ingestion_schema, analytics_schema]:
+    spark.sql(f'CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}`')
+
+module = load_scenario(scenario)
+for table_name, factory in module.SEED_TABLES.items():
+    fqn = f'`{catalog}`.`{source_schema}`.`{table_name}`'
+    factory(spark).write.mode('overwrite').saveAsTable(fqn)

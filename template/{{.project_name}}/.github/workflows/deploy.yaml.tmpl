@@ -1,0 +1,106 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+{{- if ne .deployment_model "dev_prd"}}
+    tags:
+      - 'v*'
+{{- end}}
+
+jobs:
+  integration-test:
+    uses: ./.github/workflows/_integration-test.yaml
+    secrets: inherit
+
+{{- if eq .deployment_model "dev_prd"}}
+
+  deploy-prod:
+    needs: [integration-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+      - run: databricks bundle deploy --target prod
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+{{- end}}
+
+{{- if eq .deployment_model "dev_stg_prd"}}
+
+  deploy-staging:
+    needs: [integration-test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+      - run: databricks bundle deploy --target staging
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+
+  deploy-prod:
+    needs: [integration-test]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+      - run: databricks bundle deploy --target prod
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+{{- end}}
+
+{{- if eq .deployment_model "dev_tst_acc_prd"}}
+
+  deploy-test:
+    needs: [integration-test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+      - run: databricks bundle deploy --target test
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+
+  deploy-acceptance:
+    needs: [integration-test]
+    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-rc.')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+      - run: databricks bundle deploy --target acceptance
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+
+  deploy-prod:
+    needs: [integration-test]
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - uses: astral-sh/setup-uv@v4
+      - run: databricks bundle deploy --target prod
+        working-directory: bundle
+        env:
+          DATABRICKS_HOST: {{ "${{" }} secrets.DATABRICKS_HOST {{ "}}" }}
+          DATABRICKS_TOKEN: {{ "${{" }} secrets.DATABRICKS_TOKEN {{ "}}" }}
+{{- end}}

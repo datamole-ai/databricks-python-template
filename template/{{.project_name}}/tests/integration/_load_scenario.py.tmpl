@@ -1,0 +1,23 @@
+"""Fixture scenario loader for Databricks integration notebooks.
+
+Loads a module from ``tests/data/<name>.py`` via importlib so fixtures are
+not shipped with the wheel. Imported as a sibling
+(``from _load_scenario import load_scenario``) -- Databricks Workspace
+Files puts the notebook's own directory on ``sys.path``.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+from types import ModuleType
+
+_DATA_DIR = (Path(__file__).parent.parent / 'data').resolve()
+
+
+def load_scenario(name: str) -> ModuleType:
+    path = _DATA_DIR / f'{name}.py'
+    spec = importlib.util.spec_from_file_location(f'tests_data_{name}', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module

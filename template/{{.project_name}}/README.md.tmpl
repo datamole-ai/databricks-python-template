@@ -1,0 +1,29 @@
+# {{.project_name}}
+
+Databricks Asset Bundle project: star-schema warehouse enrichment (ingest → metrics + anomaly alerts).
+
+## Documentation
+
+**Operator and architecture documentation** lives in the **template repository’s root `README.md`** — the tree you passed to `databricks bundle init` (open that repo on GitHub for rendering). It is the single canonical guide: development flow (`_bootstrap`, `load_config`), testing pyramid, fixtures, configuration, CI/CD, and promotion for every deployment model.
+
+## Generated settings
+
+| Prompt | Value |
+| --- | --- |
+| `deployment_model` | `{{.deployment_model}}` |
+| `serverless` | `{{.serverless}}` |
+
+## Quick commands
+
+```bash
+uv sync --group dev
+uv run pytest tests/ -v
+uv run ruff check . && uv run ruff format .
+
+databricks bundle deploy --target dev
+# dev_id required for bundle run (job context); any unique string. Interactive notebooks omit it → current_user().
+databricks bundle run integration_test_job --target dev --params dev_id=my_run,scenario=basic
+databricks bundle run {{.project_name}}_pipeline --target dev --params dev_id=my_run
+```
+
+Set `owner` and `repository` in `cog.toml`, and `defaults.source_catalog` / `defaults.source_schema` in `config/app.yaml`, before relying on releases or non-dev environments.

@@ -1,0 +1,21 @@
+# Databricks notebook source
+"""Integration-tests bootstrap.
+
+Chains the regular notebook bootstrap (``%run ../../notebooks/_bootstrap``),
+then adds ``<repo_root>/notebooks`` to ``sys.path`` so integration notebooks
+in this directory can sibling-import ``_load_config``. Run from the first
+cell of every integration notebook via ``%run ./_bootstrap``.
+"""
+
+# COMMAND ----------
+
+# MAGIC %run ../../notebooks/_bootstrap
+
+# COMMAND ----------
+
+import sys
+from pathlib import Path
+
+_NOTEBOOKS_DIR = str((Path.cwd() / '..' / '..' / 'notebooks').resolve())
+if _NOTEBOOKS_DIR not in sys.path:
+    sys.path.insert(0, _NOTEBOOKS_DIR)

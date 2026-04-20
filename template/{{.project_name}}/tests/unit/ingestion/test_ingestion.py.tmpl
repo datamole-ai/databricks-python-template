@@ -1,0 +1,16 @@
+from chispa.dataframe_comparer import assert_df_equality
+
+from {{.project_name}}.ingestion.enrich import run_ingestion
+
+
+def test_run_ingestion(spark, basic_tables):
+    run_ingestion(
+        spark=spark,
+        source_fact_table='telemetry_fact',
+        source_site_table='site_dim',
+        source_device_table='device_dim',
+        target_table='enriched_telemetry',
+    )
+    result = spark.table('enriched_telemetry')
+    expected = spark.table('expected_enriched_telemetry')
+    assert_df_equality(result, expected, ignore_row_order=True, ignore_metadata=True)

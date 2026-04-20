@@ -1,0 +1,27 @@
+from {{.project_name}}.config import AppConfig, load_yaml_config
+
+
+def test_load_yaml_config_merge_and_dev_id(tmp_path):
+    cfg_dir = tmp_path / 'config'
+    cfg_dir.mkdir()
+    (cfg_dir / 'app.yaml').write_text(
+        """
+defaults:
+  source_catalog: src_cat
+  source_schema: src_schema
+  analytics_schema_name: analytics
+environments:
+  dev:
+    catalog_name: my_dev
+    ingestion_schema_name: "{dev_id}_ingestion"
+""",
+        encoding='utf-8',
+    )
+    cfg = load_yaml_config(cfg_dir / 'app.yaml', 'dev', dev_id='alice_test')
+    assert isinstance(cfg, AppConfig)
+    assert cfg.catalog_name == 'my_dev'
+    assert cfg.ingestion_schema_name == 'alice_test_ingestion'
+    assert cfg.source_catalog == 'src_cat'
+    assert cfg.source_schema == 'src_schema'
+    assert cfg.analytics_schema_name == 'analytics'
+    assert cfg.to_dict()['catalog_name'] == 'my_dev'

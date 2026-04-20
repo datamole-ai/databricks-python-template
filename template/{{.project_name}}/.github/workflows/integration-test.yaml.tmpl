@@ -1,0 +1,28 @@
+name: Integration Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+{{- if ne .deployment_model "dev_prd"}}
+      - 'release/**'
+{{- end}}
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Fixture scenario to run'
+        required: false
+        default: 'basic'
+
+concurrency:
+  group: integration-test-{{ "${{" }} github.event.pull_request.number || github.run_id {{ "}}" }}
+  cancel-in-progress: false
+
+jobs:
+  integration-test:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    uses: ./.github/workflows/_integration-test.yaml
+    with:
+      scenario: {{ "${{" }} github.event_name == 'workflow_dispatch' && inputs.scenario || 'basic' {{ "}}" }}
+    secrets: inherit

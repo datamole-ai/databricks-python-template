@@ -1,0 +1,27 @@
+# Databricks notebook source
+
+# MAGIC %run ./_bootstrap
+
+# COMMAND ----------
+
+from _load_config import load_config
+from {{.project_name}}.ingestion.enrich import run_ingestion
+from {{.project_name}}.ingestion.tables.enriched_telemetry import TABLE_NAME as ENRICHED_TELEMETRY
+from {{.project_name}}.ingestion.tables.source_tables import DEVICE_DIM, SITE_DIM, TELEMETRY_FACT
+
+# COMMAND ----------
+
+cfg = load_config(dbutils, spark)
+
+# COMMAND ----------
+
+src = f'{cfg.source_catalog}.{cfg.source_schema}'
+tgt = f'{cfg.catalog_name}.{cfg.ingestion_schema_name}'
+
+run_ingestion(
+    spark=spark,
+    source_fact_table=f'{src}.{TELEMETRY_FACT}',
+    source_site_table=f'{src}.{SITE_DIM}',
+    source_device_table=f'{src}.{DEVICE_DIM}',
+    target_table=f'{tgt}.{ENRICHED_TELEMETRY}',
+)

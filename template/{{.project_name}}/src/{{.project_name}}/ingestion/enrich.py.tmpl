@@ -1,0 +1,37 @@
+from pyspark.sql import DataFrame, SparkSession
+
+from {{.project_name}}.ingestion.tables import enriched_telemetry as et
+
+
+def enrich_telemetry(
+    telemetry_fact: DataFrame,
+    site_dim: DataFrame,
+    device_dim: DataFrame,
+) -> DataFrame:
+    return (
+        telemetry_fact
+        .join(site_dim, 'site_id', 'left')
+        .join(device_dim, et.COL_EQUIPMENT_ID, 'left')
+        .select(
+            et.COL_EQUIPMENT_ID, et.COL_DEVICE_TYPE, et.COL_MANUFACTURER,
+            et.COL_SITE_NAME, et.COL_REGION,
+            et.COL_TEMPERATURE, et.COL_VIBRATION, et.COL_PRESSURE,
+            et.COL_TIMESTAMP,
+        )
+    )
+
+
+def run_ingestion(
+    spark: SparkSession,
+    source_fact_table: str,
+    source_site_table: str,
+    source_device_table: str,
+    target_table: str,
+) -> None:
+    fact = spark.table(source_fact_table)
+    sites = spark.table(source_site_table)
+    devices = spark.table(source_device_table)
+
+    enriched = enrich_telemetry(fact, sites, devices)
+    spark.sql(f'DROP TABLE IF EXISTS {target_table}')
+    enriched.write.mode('overwrite').saveAsTable(target_table)

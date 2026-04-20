@@ -1,0 +1,72 @@
+# Databricks notebook source
+"""Make the project package importable in a notebook.
+
+Run from the first cell of each notebook via ``%run ./_bootstrap``.
+
+- **Jobs**: no-op if the package is importable; otherwise raise with a hint to attach the bundle wheel.
+- **Interactive**: editable install (``pip install -e``), prepend ``src/`` to ``sys.path``, enable IPython autoreload.
+
+Assumes notebooks live at ``<repo_root>/notebooks/``.
+"""
+
+# COMMAND ----------
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+_PROJECT = '{{.project_name}}'
+
+
+def _is_interactive_run() -> bool:
+    try:
+        return spark.conf.get('spark.databricks.job.id', None) is None  # noqa: F821
+    except Exception as e:
+        print(f'[bootstrap] Could not read spark.databricks.job.id: {e!r}; assuming interactive.')
+        return True
+
+
+def _find_repo_root() -> Path:
+    start = Path.cwd().resolve()
+    for candidate in (start, *start.parents):
+        if (candidate / 'pyproject.toml').is_file():
+            return candidate
+    raise RuntimeError(
+        f'[bootstrap] Could not locate repo root (no pyproject.toml found walking up from {start}).'
+    )
+
+
+def _prepare_interactive_repos_driver() -> None:
+    """Editable install, prepend ``src/`` to ``sys.path``, enable autoreload."""
+    ip = get_ipython()  # noqa: F821
+    if ip is None:
+        raise RuntimeError('get_ipython() returned None; interactive setup requires an IPython kernel.')
+
+    repo_root = _find_repo_root()
+    ip.run_line_magic('pip', f'install -e "{repo_root}"')
+
+    src = str(repo_root / 'src')
+    if src not in sys.path:
+        sys.path.insert(0, src)
+
+    ip.run_line_magic('load_ext', 'autoreload')
+    ip.run_line_magic('autoreload', '2')
+
+
+def prepare_for_interactive_run() -> None:
+    """No-op if the package is already importable; run interactive setup otherwise, or raise on a job without the wheel."""
+    if importlib.util.find_spec(_PROJECT) is not None:
+        return
+
+    if not _is_interactive_run():
+        raise RuntimeError(
+            f'Package {_PROJECT!r} is not importable on this job run. Attach the project wheel via bundle job libraries '
+            f'(e.g. resources/*.yml: `libraries: - whl: ../dist/*.whl`) or install the library on the cluster.'
+        )
+
+    _prepare_interactive_repos_driver()
+
+
+prepare_for_interactive_run()

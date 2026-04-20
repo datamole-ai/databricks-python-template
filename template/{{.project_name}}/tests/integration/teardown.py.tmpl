@@ -1,0 +1,21 @@
+# Databricks notebook source
+
+# MAGIC %run ./_bootstrap
+
+# COMMAND ----------
+
+from _load_config import load_config
+
+# COMMAND ----------
+
+cfg = load_config(dbutils, spark)
+
+# COMMAND ----------
+
+catalog = cfg.catalog_name
+source_schema = cfg.source_schema
+ingestion_schema = cfg.ingestion_schema_name
+analytics_schema = cfg.analytics_schema_name
+
+for schema in [source_schema, ingestion_schema, analytics_schema]:
+    spark.sql(f'DROP SCHEMA IF EXISTS `{catalog}`.`{schema}` CASCADE')

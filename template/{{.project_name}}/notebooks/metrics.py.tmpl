@@ -1,0 +1,22 @@
+# Databricks notebook source
+
+# MAGIC %run ./_bootstrap
+
+# COMMAND ----------
+
+from _load_config import load_config
+from {{.project_name}}.analytics.metrics import run_equipment_metrics
+from {{.project_name}}.analytics.tables.equipment_metrics import TABLE_NAME as EQUIPMENT_METRICS
+from {{.project_name}}.ingestion.tables.enriched_telemetry import TABLE_NAME as ENRICHED_TELEMETRY
+
+# COMMAND ----------
+
+cfg = load_config(dbutils, spark)
+
+# COMMAND ----------
+
+run_equipment_metrics(
+    spark=spark,
+    source_table=f'{cfg.catalog_name}.{cfg.ingestion_schema_name}.{ENRICHED_TELEMETRY}',
+    target_table=f'{cfg.catalog_name}.{cfg.analytics_schema_name}.{EQUIPMENT_METRICS}',
+)

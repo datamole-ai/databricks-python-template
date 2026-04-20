@@ -1,0 +1,160 @@
+"""load_config + widget / path helpers for Databricks notebooks.
+
+Imported as a sibling (``from _load_config import load_config``) from each
+notebook AFTER ``%run ./_bootstrap`` has made the project package importable
+and added ``<repo_root>/notebooks`` to ``sys.path``.
+
+Pure Python -- safe to import from pytest too (no dbutils/spark at module
+scope); the dbutils/spark dependencies are function arguments.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from {{.project_name}}.config import AppConfig, contains_dev_id_placeholder, load_yaml_config
+
+_REPO_MARKERS = ('pyproject.toml', 'databricks.yml')
+
+
+def _iter_ancestor_directories(start: Path) -> Iterator[Path]:
+    yield start
+    yield from start.parents
+
+
+def _is_repo_root(path: Path) -> bool:
+    return any((path / name).is_file() for name in _REPO_MARKERS)
+
+
+def _notebook_dirs(dbutils: Any, spark: Any | None) -> list[Path]:
+    out: list[Path] = []
+    if dbutils is not None:
+        try:
+            ctx = dbutils.notebook.entry_point.getDbutils().notebook().getContext()
+            raw = ctx.notebookPath().get()
+            if raw:
+                out.append(Path(str(raw)).parent)
+        except Exception:
+            pass
+    if spark is not None:
+        try:
+            p = spark.conf.get('spark.databricks.notebook.path', None)
+            if p:
+                out.append(Path(str(p)).parent)
+        except Exception:
+            pass
+    return out
+
+
+def resolve_config_path(dbutils: Any, relative_path: str, spark: Any | None = None) -> Path:
+    """Resolve ``relative_path`` from repository / bundle sync root (Repos UI + jobs).
+
+    Tries: absolute path, ``REPO_ROOT`` / ``DATABRICKS_BUNDLE_ROOT``, cwd ancestor walk,
+    notebook path / ``spark.databricks.notebook.path`` ancestor walk.
+    Raises ``FileNotFoundError`` with hints if unresolved.
+    """
+    rel = Path(relative_path)
+    if rel.is_absolute() and rel.is_file():
+        return rel
+
+    errors: list[str] = []
+
+    for env_name in ('REPO_ROOT', 'DATABRICKS_BUNDLE_ROOT'):
+        root = os.environ.get(env_name)
+        if root:
+            candidate = Path(root) / relative_path
+            if candidate.is_file():
+                return candidate
+            errors.append(f'{env_name}={root!r} -> {candidate} (missing)')
+
+    cwd = Path.cwd()
+    for base in _iter_ancestor_directories(cwd):
+        if _is_repo_root(base):
+            candidate = base / relative_path
+            if candidate.is_file():
+                return candidate
+
+    for nb_dir in _notebook_dirs(dbutils, spark):
+        for base in _iter_ancestor_directories(nb_dir):
+            if _is_repo_root(base):
+                candidate = base / relative_path
+                if candidate.is_file():
+                    return candidate
+            candidate = base / relative_path
+            if candidate.is_file():
+                return candidate
+
+    hint = (
+        'Could not find {rel!s}. Tried cwd/notebook ancestors, and REPO_ROOT. '
+        'Set REPO_ROOT to the repo root, use an absolute config_file_path, or run from a synced checkout.'
+    ).format(rel=relative_path)
+    raise FileNotFoundError(f'{hint} Details: {"; ".join(errors) if errors else "no env overrides"}')
+
+
+def _get_or_create_text_widget(dbutils: Any, name: str, default: str) -> str:
+    try:
+        return dbutils.widgets.get(name)
+    except Exception:
+        dbutils.widgets.text(name, default)
+        return dbutils.widgets.get(name)
+
+
+def _in_databricks_job(dbutils: Any) -> bool:
+    """True if running as a Databricks job (classic or serverless).
+
+    Relies on a ``job_run_id`` widget populated by the Jobs service via the
+    ``{{ "{{" }}job.run_id{{ "}}" }}`` dynamic value reference in each task's
+    ``base_parameters``. Works uniformly on classic and serverless compute,
+    unlike probing Spark conf or the Scala notebook context, both of which
+    are unreliable on serverless.
+    """
+    try:
+        return dbutils.widgets.get('job_run_id').strip() != ''
+    except Exception:
+        return False
+
+
+def _resolve_dev_id(dbutils: Any, spark: Any, merged: dict[str, Any]) -> str:
+    if not contains_dev_id_placeholder(merged):
+        return ''
+
+    dev_id = _get_or_create_text_widget(dbutils, 'dev_id', '').strip()
+    if dev_id:
+        return dev_id
+
+    if _in_databricks_job(dbutils):
+        raise ValueError(
+            'dev_id job parameter is required when the config contains {dev_id} placeholders '
+            'and the notebook runs as a job (e.g. pass dev_id from CI or bundle run).'
+        )
+
+    row = spark.sql('SELECT current_user()').collect()[0]
+    user_email = row[0]
+    return str(user_email).split('@', 1)[0].replace('.', '_')
+
+
+def load_config(dbutils: Any, spark: Any, *, config_file_path: str | None = None, env: str | None = None) -> AppConfig:
+    """Load config from YAML, applying Databricks widget / job parameter resolution.
+
+    Widgets / job parameters: ``config_file_path`` (default ``config/app.yaml``), ``env`` (default ``dev``),
+    ``dev_id`` (optional; required for job runs when placeholders need it).
+    """
+    config_file_path = config_file_path or _get_or_create_text_widget(dbutils, 'config_file_path', 'config/app.yaml')
+    env = env or _get_or_create_text_widget(dbutils, 'env', 'dev')
+
+    path = resolve_config_path(dbutils, config_file_path, spark)
+
+    with path.open('r', encoding='utf-8') as f:
+        doc = yaml.safe_load(f)
+    defaults = doc.get('defaults') or {}
+    env_block = (doc.get('environments') or {}).get(env) or {}
+    merged_preview = {**defaults, **env_block}
+
+    dev_id = _resolve_dev_id(dbutils, spark, merged_preview)
+
+    return load_yaml_config(path, env, dev_id)
